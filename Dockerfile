@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # Code lives under src/svcdesk (see src/README.md).
 COPY src/ /app/src/
 
+# The practice fixtures, so the tests profile (Stretch S3) can read them without a network call.
+COPY fixtures/ /app/fixtures/
+
 # The SQLite file goes to /data (a named volume in docker-compose.yml), so tickets survive a restart.
 RUN mkdir -p /data
 ENV SVCDESK_DB=/data/svcdesk.db

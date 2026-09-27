@@ -1,37 +1,29 @@
-# ai-generated: 90% - Claude Code drafted this from REQUIREMENTS.md and API.md; the author chose the
-# C1/C2/C3 resolutions and reviewed the state machine and error handling against API.md sections 1, 6, 7, 8
-"""svcdesk - the HTTP service (API.md). See specs/spec.md for the reasoning behind C1, C2 and C3."""
+# ai-generated: 90% - Claude Code drafted this from REQUIREMENTS.md, API.md and METRIC-SPEC.md; the author
+# chose the C1/C2/C3 resolutions, the gaming demonstration's target metric, and reviewed the DORA endpoints
+"""svcdesk - the HTTP service (API.md, METRIC-SPEC.md). See specs/spec.md for C1/C2/C3, dora.py for the metrics."""
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import storage
+from . import dora, storage
 from .config import C2
 from .errors import ApiError
 from .models import CreateTicketIn
 from .priority import compute_priority, targets_for
 from .sla import ack_clock_for, due_at, is_outside_business_hours, resolve_clock_for
+from .timeutil import format_instant, parse_instant
 
 app = FastAPI(title="svcdesk")
 storage.init_db()
 
 
 # --- test clock (API.md section 8) -----------------------------------------------------------
-
-def _parse_instant(raw: str) -> datetime:
-    text = raw.strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    dt = datetime.fromisoformat(text)
-    if dt.tzinfo is None:
-        raise ValueError("instant must include an offset")
-    return dt.astimezone(timezone.utc)
-
 
 def get_now(request: Request) -> datetime:
     from .config import test_clock_enabled
@@ -40,7 +32,7 @@ def get_now(request: Request) -> datetime:
         header = request.headers.get("X-Test-Clock")
         if header:
             try:
-                return _parse_instant(header)
+                return parse_instant(header)
             except ValueError:
                 raise ApiError(422, "validation", "X-Test-Clock is not a valid RFC 3339 instant")
     return datetime.now(timezone.utc)
@@ -51,7 +43,7 @@ def get_now(request: Request) -> datetime:
 def _fmt(dt: Optional[datetime]) -> Optional[str]:
     if dt is None:
         return None
-    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return format_instant(dt)
 
 
 def serialize(t: dict) -> dict:
@@ -251,3 +243,62 @@ def close(ticket_id: str, now: datetime = Depends(get_now)) -> dict:
 @app.post("/tickets/{ticket_id}/reopen")
 def reopen(ticket_id: str, now: datetime = Depends(get_now)) -> dict:
     return serialize(_transition(ticket_id, "reopen", now))
+
+
+# --- Lab 2: DORA metrics (METRIC-SPEC.md) -------------------------------------------------------
+
+class DoraWindowIn(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+    from_: str = Field(alias="from")
+    to: str
+
+
+class DoraMetricsIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    window: DoraWindowIn
+    events: list[dict[str, Any]]
+
+
+def _format_metrics_response(result: dict) -> dict:
+    out = dict(result)
+    out["window"] = {"from": format_instant(result["window"]["from"]), "to": format_instant(result["window"]["to"])}
+    return out
+
+
+@app.post("/dora/metrics")
+def dora_metrics(payload: DoraMetricsIn) -> dict:
+    try:
+        window_from = parse_instant(payload.window.from_)
+        window_to = parse_instant(payload.window.to)
+    except ValueError:
+        raise ApiError(400, "validation", "window.from and window.to must be RFC 3339 instants")
+    if not (window_to > window_from):
+        raise ApiError(400, "validation", "window.to must be after window.from")
+    try:
+        result = dora.compute_metrics(window_from, window_to, payload.events)
+    except dora.MalformedLogError as exc:
+        raise ApiError(422, "validation", str(exc))
+    return _format_metrics_response(result)
+
+
+def _ticket_lifecycle_events(t: dict) -> list[dict]:
+    events = []
+    for phase, field, state in (
+        ("created", "created_at", "new"),
+        ("acknowledged", "acknowledged_at", "acknowledged"),
+        ("resolved", "resolved_at", "resolved"),
+        ("closed", "closed_at", "closed"),
+    ):
+        at = t[field]
+        if at is not None:
+            events.append({"ticket_id": t["id"], "at": at, "phase": phase, "priority": t["priority"], "state": state})
+    return events
+
+
+@app.get("/dora/ticket-events")
+def dora_ticket_events() -> list[dict]:
+    events = []
+    for t in storage.list_tickets():
+        events.extend(_ticket_lifecycle_events(t))
+    events.sort(key=lambda e: (e["at"], e["ticket_id"]))
+    return [{**e, "at": format_instant(e["at"])} for e in events]
