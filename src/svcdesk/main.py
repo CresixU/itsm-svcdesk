@@ -11,15 +11,19 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import dora, storage
+from . import dora, kb, storage
 from .config import C2
 from .errors import ApiError
 from .models import CreateTicketIn
+from .observability import MetricsMiddleware, metrics_endpoint
 from .priority import compute_priority, targets_for
 from .sla import ack_clock_for, due_at, is_outside_business_hours, resolve_clock_for
 from .timeutil import format_instant, parse_instant
 
-app = FastAPI(title="svcdesk")
+app = FastAPI(title="svcdesk", lifespan=kb.lifespan)
+app.add_middleware(MetricsMiddleware)
+app.include_router(kb.router)
+app.add_api_route("/metrics", metrics_endpoint, methods=["GET"], include_in_schema=False)
 storage.init_db()
 
 

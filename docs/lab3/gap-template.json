@@ -1,0 +1,7 @@
+{
+  "_comment": "Stretch 2 (L3-STRETCH-2, MONITORING-SPEC.md M-30). Copy to gap.json at your repository root. `toxic` is the Toxiproxy latency toxic you measured through, in milliseconds: latency 20..500, jitter 0..latency (the numbers below are an example; write the ones you used). Then the three numbers you measured through it, in seconds: client_p99_seconds (q of `itsmlab load 3 --base-url <the proxy>`), server_p99_seconds (your histogram's own p99 over the same run) and gap_seconds (client minus server). The checker re-measures the gap with your toxic and accepts yours within max(15 ms, 30 %). gap/README.md explains the gap in at least 400 characters. Delete this comment.",
+  "toxic": {"type": "latency", "latency": 100, "jitter": 10},
+  "client_p99_seconds": null,
+  "server_p99_seconds": null,
+  "gap_seconds": null
+}

@@ -1,0 +1,17 @@
+# k8s/values.yaml - Helm values for kube-prometheus-stack 89.2.2 on kind v0.33.0 (Stretch 3, L3-STRETCH-3,
+# MONITORING-SPEC.md M-31). Optional, never required.
+#   kind create cluster
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm install kps prometheus-community/kube-prometheus-stack --version 89.2.2 -f k8s/values.yaml
+# The checker reads two values here: prometheus.prometheusSpec.retention (must be 2h) and
+# prometheus.prometheusSpec.resources.limits.memory (at most 1Gi). Keep both caps.
+prometheus:
+  prometheusSpec:
+    retention: 2h
+    resources:
+      limits:
+        memory: 1Gi
+    # Select every PrometheusRule and ServiceMonitor in the cluster, not only those that carry the chart's own
+    # `release` label, so that k8s/prometheusrule.yaml and k8s/servicemonitor.yaml are picked up as they are.
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false

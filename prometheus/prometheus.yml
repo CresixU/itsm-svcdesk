@@ -1,0 +1,16 @@
+# ai-generated: 0% - the course skeleton, unchanged apart from this header
+# prometheus/prometheus.yml - the configuration of YOUR OWN Prometheus (compose profile "observability").
+# The checker never reads this file: it runs its own Prometheus 3.15.0 with one scrape job named `svcdesk`,
+# scraping every 5 s, and loads your alerts.yml. Keep the job name `svcdesk` here too, so that the SLI queries of
+# slo.md and the alert expressions that select job="svcdesk" mean the same thing on both.
+global:
+  scrape_interval: 5s          # as the checker's
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml                 # relative to this file: /etc/prometheus/alerts.yml in the container
+
+scrape_configs:
+  - job_name: svcdesk          # exactly this name
+    static_configs:
+      - targets: ["svcdesk:8080"]

@@ -1,0 +1,20 @@
+# buckets-flawed.example.yml - the instructor's flawed ladder (MONITORING-SPEC.md M-27), in seconds.
+# Fourteen boundaries: twelve below 40 ms, then 0.5 and 2.5 - fine where the median lives, blind where the p99 does.
+# Do not use it in your service. In ai-first-draft.md, `lab3_flawed_ladder` gives it the verdict `refuted` with the
+# arithmetic for your own p99. On the no-AI path (`source: instructor`) it is also your first draft: copy these
+# fourteen numbers, in this order, into `lab3_first_draft.ladder`. The checker carries its own copy; editing this
+# file changes nothing it checks.
+- 0.001
+- 0.0025
+- 0.005
+- 0.0075
+- 0.01
+- 0.0125
+- 0.015
+- 0.0175
+- 0.02
+- 0.025
+- 0.03
+- 0.04
+- 0.5
+- 2.5

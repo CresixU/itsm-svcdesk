@@ -18,6 +18,8 @@ COPY fixtures/ /app/fixtures/
 # The SQLite file goes to /data (a named volume in docker-compose.yml), so tickets survive a restart.
 RUN mkdir -p /data
 ENV SVCDESK_DB=/data/svcdesk.db
+# Lab 3: no *_created gauge series next to every histogram label set (fewer series, M-07).
+ENV PROMETHEUS_DISABLE_CREATED_SERIES=True
 
 EXPOSE 8080
 CMD ["uvicorn", "svcdesk.main:app", "--app-dir", "/app/src", "--host", "0.0.0.0", "--port", "8080"]

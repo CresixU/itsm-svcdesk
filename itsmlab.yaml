@@ -1,5 +1,6 @@
 # itsmlab.yaml - read by the checker (itsmlab) and by the wrappers itsmlab.sh / itsmlab.ps1.
-lab: 2                                   # the lab this repository is currently submitting
+lab: 3                                   # the lab this repository is currently submitting
+login: cresixu                           # Lab 3: the GitHub login the kb-index profile is derived from (the receipt's)
 baselines: {lab1: student}               # from Lab 2 on: per earlier lab, "student" or "checkpoint"
 repository: "cresixu/itsm-svcdesk"             # your public GitHub repository, e.g. "jkowalski/itsm-svcdesk"
 submissions_repo: swasik/itsm-2026-submissions
