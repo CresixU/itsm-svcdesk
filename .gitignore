@@ -7,3 +7,7 @@ __pycache__/
 # local data: use a named volume in docker-compose.yml, never a bind mount
 data/
 *.db
+
+# Lab 4: the agent loop writes a JSON-lines twin next to every transcript; the .md is the deliverable
+ai-rca/**/transcript.jsonl
+.gemini/

@@ -1,0 +1,4 @@
+# ai-generated: 0% - written by the course team
+# The course's MCP server and agent loop for Lab 4 (Python 3.10 or newer). Pinned 27 September 2026.
+mcp==2.2.0
+openai==3.19.2

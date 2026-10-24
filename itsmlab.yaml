@@ -1,7 +1,7 @@
 # itsmlab.yaml - read by the checker (itsmlab) and by the wrappers itsmlab.sh / itsmlab.ps1.
-lab: 3                                   # the lab this repository is currently submitting
+lab: 4                                   # the lab this repository is currently submitting
 login: cresixu                           # Lab 3: the GitHub login the kb-index profile is derived from (the receipt's)
-baselines: {lab1: student}               # from Lab 2 on: per earlier lab, "student" or "checkpoint"
+baselines: {lab3: student}               # from Lab 2 on: per earlier lab, "student" or "checkpoint"
 repository: "cresixu/itsm-svcdesk"             # your public GitHub repository, e.g. "jkowalski/itsm-svcdesk"
 submissions_repo: swasik/itsm-2026-submissions
 checker_image: ghcr.io/swasik/itsmlab:2026  # the course tag: leave it; a checker update is `docker pull` of this tag

@@ -1,0 +1,41 @@
+# ai-generated: 85% - Claude Code drafted this routing tree and its inhibit rule from INCIDENT-SPEC.md I-04 to I-08; the author reviews it
+# alertmanager/alertmanager.yml - my routing tree (INCIDENT-SPEC.md I-04 to I-08; checks L4-CORE-2.04 to 2.08).
+#
+# P1 pages the on-call (receiver pager). P2 and P3 go to chat and never to the pager. svcdesk's Lab 3 alerts carry the same
+# severity labels, so they join the same tree with no route of their own: KbSearchAvailabilityBurnFast (P1) pages, the
+# other three go to chat.
+#
+# The root receiver is chat, on purpose: an alert whose severity is missing or misspelled falls through to chat and does
+# not wake anyone; only a route that matches severity="P1" can reach the pager.
+global:
+  resolve_timeout: 5m
+route:
+  receiver: chat
+  group_by: [alertname, service]
+  group_wait: 10s                 # the first notification of a new group waits this long: it is part of the MTTA
+  group_interval: 1m
+  repeat_interval: 4h
+  routes:
+    - matchers: ['severity="P1"']
+      receiver: pager
+    - matchers: ['severity=~"P2|P3"']
+      receiver: chat
+receivers:
+  - name: pager                   # the on-call's phone: http://localhost:18091 shows what reached it
+    webhook_configs:
+      - url: http://pager:8080/hook/pager
+        send_resolved: true
+  - name: chat
+    webhook_configs:
+      - url: http://pager:8080/hook/chat
+        send_resolved: true
+inhibit_rules:
+  # While a page for the shop is firing, the P2 and P3 alerts of the same system are downstream noise: the checkout page
+  # already says the shop's users are affected, and a frontend warning for the same shop adds a notification, not a fact.
+  # `equal: [system]` keeps the mute inside one system: every shop alert carries system="shop" (prometheus/demo-alerts.yml),
+  # so a P1 of the shop never mutes the alerts of another system. The label is spelled exactly as the rules spell it:
+  # a label missing from both alerts counts as equal, and a misspelled `equal` would mute every target everywhere.
+  # routing-tests.yml proves it in both directions (the pair of I-08).
+  - source_matchers: ['severity="P1"']
+    target_matchers: ['severity=~"P2|P3"']
+    equal: [system]

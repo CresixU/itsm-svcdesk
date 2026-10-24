@@ -1,0 +1,5 @@
+The files in this directory are the ITSM course's overlay for the OpenTelemetry Demo
+(https://github.com/open-telemetry/opentelemetry-demo), Copyright The OpenTelemetry Authors, licensed under the
+Apache License, Version 2.0 (NOTICE-APACHE-2.0.txt). prometheus/prometheus.yml is derived from the demo's
+src/prometheus/prometheus-config.yaml and marked as changed. The overlay references the demo's images and those of
+the course; it redistributes none of them. The course is not endorsed by the OpenTelemetry project.

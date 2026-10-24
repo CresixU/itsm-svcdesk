@@ -1,0 +1,55 @@
+{
+  "_comment": "The AI ledger (INCIDENT-SPEC.md section 4.6, I-23 to I-28; checks L4-CORE-5.01 to 5.06). Copy it to ai-rca-eval.json at your repository root (Stretch 1: a second copy, ai-rca-eval-2.json). `investigator.transcript` is the path of the saved transcript inside your repository, at least 200 bytes. One entry per hypothesis the agent stated, at least three, with unique ids. `hypothesis` is the agent's own words copied from the transcript (runs of spaces and line breaks may differ, nothing else may). The four entries below show the four shapes, one per verdict; their hypotheses are placeholders and their queries are examples on the shop's span metrics: replace every entry with your own. `predicts` is a PromQL comparison that returns something exactly when the prediction holds (no `bool`, no seeded_* series); the checker runs it at `at` (an instant inside your incident, in UTC) and 5 minutes before the onset. `result` is what it returned at `at`: true for a non-empty result. correct and partially_correct need true at `at` and nothing on the baseline, and their `component` is one service name exactly as in INCIDENT-SPEC.md section 2.2; hallucinated needs false at `at`; an unfalsifiable entry has `predicts`, `at` and `result` null and says in `why_no_query` (at least 40 characters) why no query could test it. `evidence` is read, not checked. Delete this comment and every other `_comment`.",
+  "investigator": {
+    "agent": "TODO: e.g. gemini-cli 0.61.0, or the course agent loop agent.py",
+    "model": "TODO: e.g. gemini-3.8-flash, or qwen3:1.7b",
+    "mcp_server": "prom_mcp.py (mcp 2.2.0)",
+    "transcript": "ai-rca/transcript.md"
+  },
+  "hypotheses": [
+    {
+      "_comment": "correct: the prediction held against the data. Evidence: the query, and its result.",
+      "id": "H1",
+      "hypothesis": "TODO: the agent's words, copied from the transcript",
+      "component": "payment",
+      "predicts": "sum(rate(traces_span_metrics_calls_total{service_name=\"payment\", span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\"}[5m])) > 0.05",
+      "at": "2026-10-24T10:52:00Z",
+      "result": true,
+      "verdict": "correct",
+      "evidence": "TODO: what the query returned at `at` (for example 0.21 failed calls per second), and that it returned nothing 5 minutes before the onset"
+    },
+    {
+      "_comment": "partially_correct: the right component, the wrong mechanism or time. Evidence: the query that splits the two - here `A unless B`: true when the component's latency rose (A, the part that held) and its errors did not (B, the part the agent got wrong).",
+      "id": "H2",
+      "hypothesis": "TODO: the agent's words, copied from the transcript",
+      "component": "product-catalog",
+      "predicts": "histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"product-catalog\", span_kind=\"SPAN_KIND_SERVER\"}[5m]))) > 1000 unless on() sum(rate(traces_span_metrics_calls_total{service_name=\"product-catalog\", span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\"}[5m])) > 0.05",
+      "at": "2026-10-24T10:55:00Z",
+      "result": true,
+      "verdict": "partially_correct",
+      "evidence": "TODO: which part held and which did not, with what each part of the query returned"
+    },
+    {
+      "_comment": "hallucinated: the data says otherwise. Evidence: the query that contradicts it. The metric must exist in your snapshot: a query on a name nobody exports returns nothing whatever happened, and proves nothing.",
+      "id": "H3",
+      "hypothesis": "TODO: the agent's words, copied from the transcript",
+      "component": "cart",
+      "predicts": "sum(rate(traces_span_metrics_calls_total{service_name=\"cart\", span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\"}[5m])) > 0.01",
+      "at": "2026-10-24T10:52:00Z",
+      "result": false,
+      "verdict": "hallucinated",
+      "evidence": "TODO: what the data shows instead, for example cart's failed calls at `at`"
+    },
+    {
+      "_comment": "unfalsifiable: no query could prove it wrong. Evidence: none - that is the verdict. A hypothesis that names a service and a signal is testable: write its query instead, even if nobody has run it yet.",
+      "id": "H4",
+      "hypothesis": "TODO: the agent's words, copied from the transcript",
+      "component": null,
+      "predicts": null,
+      "at": null,
+      "result": null,
+      "verdict": "unfalsifiable",
+      "why_no_query": "TODO: why no query could prove it wrong - it names no service, no signal and no time"
+    }
+  ]
+}

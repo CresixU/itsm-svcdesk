@@ -1,0 +1,76 @@
+# ai-generated: 85% - Claude Code drafted these rules from INCIDENT-SPEC.md I-01, I-02 and checked their thresholds on the recording; the author reviews them
+# prometheus/demo-alerts.yml - my symptom alerts on the shop (INCIDENT-SPEC.md I-01, I-02, I-05; checks L4-CORE-2.01, 2.02,
+# 2.05). They page on what the shop's users feel - checkout failing or slow, the storefront failing or slow - and leave the
+# causes (a service's memory, one flag's symptom) to dashboards and to chat (Lecture 4, slide 7).
+#
+# The data is the demo's span metrics, one sample a minute, so every window is 5 minutes and every rule counts only SERVER
+# spans: what a service answered its callers. The load generator's own client calls fail on the healthy shop and are never
+# counted. The duration histogram is in MILLISECONDS.
+#
+# Thresholds were chosen on the recorded incident (lab4-rec-1), by evaluating each expression over the recording: quiet on
+# its 15-minute baseline, firing during the fault. Every fault of the pool makes checkout fail or slow down (INCIDENT-SPEC.md
+# 2.2), so one P1 on checkout's errors and one on its latency page on every draw. All four rules are in ONE group, so that
+# alerts that start together compete on severity (I-12) and not on the offset of their group.
+#
+# `system: shop` is a static label on every rule: the inhibition of alertmanager.yml keeps its mute inside one system.
+groups:
+  - name: shop-symptoms
+    rules:
+      # P1: more than 5 % of the requests checkout answered in the last 5 minutes failed. A failing payment (paymentFailure),
+      # a failing catalogue read, and anything else that makes PlaceOrder return an error ends here.
+      - alert: CheckoutErrorRate
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}[5m]))
+          /
+          sum(rate(traces_span_metrics_calls_total{service_name="checkout", span_kind="SPAN_KIND_SERVER"}[5m]))
+          > 0.05
+        for: 1m
+        labels:
+          service: checkout
+          severity: P1
+          system: shop
+        annotations:
+          summary: "More than 5 % of checkout requests failed in the last 5 minutes"
+
+      # P1: the p99 of checkout's PlaceOrder above 2 s over 5 minutes. On the healthy shop it stays under about 100 ms; a
+      # slow shipping call or a slow email makes an order take seconds.
+      - alert: CheckoutLatencyHigh
+        expr: |
+          histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name="checkout", span_kind="SPAN_KIND_SERVER"}[5m])))
+          > 2000
+        for: 1m
+        labels:
+          service: checkout
+          severity: P1
+          system: shop
+        annotations:
+          summary: "p99 of checkout requests above 2 s over the last 5 minutes"
+
+      # P2: more than 0.2 % of the storefront's requests failed. The healthy shop has none; a failing ad service surfaces
+      # here as a trickle (one GetAds in ten), which is a warning for chat, not a page.
+      - alert: FrontendErrorRate
+        expr: |
+          sum(rate(traces_span_metrics_calls_total{service_name="frontend", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}[5m]))
+          /
+          sum(rate(traces_span_metrics_calls_total{service_name="frontend", span_kind="SPAN_KIND_SERVER"}[5m]))
+          > 0.002
+        for: 2m
+        labels:
+          service: frontend
+          severity: P2
+          system: shop
+        annotations:
+          summary: "More than 0.2 % of storefront requests failed in the last 5 minutes"
+
+      # P3: the storefront's p99 above 1.5 s over 5 minutes (the healthy shop sits near 100 ms).
+      - alert: FrontendLatencyHigh
+        expr: |
+          histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name="frontend", span_kind="SPAN_KIND_SERVER"}[5m])))
+          > 1500
+        for: 3m
+        labels:
+          service: frontend
+          severity: P3
+          system: shop
+        annotations:
+          summary: "p99 of storefront requests above 1.5 s over the last 5 minutes"

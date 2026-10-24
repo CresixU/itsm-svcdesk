@@ -1,0 +1,46 @@
+# ai-generated: ??% - TODO replace ?? with a number and say in one line how this file was written
+# alertmanager/alertmanager.yml - your routing tree (INCIDENT-SPEC.md I-04 to I-08; checks L4-CORE-2.04 to 2.08).
+# Copy it to alertmanager/alertmanager.yml in your repository BEFORE you first start the playground: the playground's
+# Alertmanager reads this file and does not start without it. After an edit, reload it:
+#   curl -X POST http://localhost:9093/-/reload
+#
+# What the checker does with this file:
+#   - `amtool check-config` (Alertmanager 0.34.1) must pass, and the receivers `pager` and `chat` must have webhooks to
+#     exactly the two URLs below (2.04);
+#   - `amtool config routes test` with the published label sets and with every alerting rule of demo-alerts.yml and
+#     alerts.yml: severity P1 must resolve to receivers that include `pager`, P2 and P3 to receivers that include
+#     `chat` and never `pager` (2.05);
+#   - the same command with every `routes` case of routing-tests.yml: exactly the receivers the case lists (2.06);
+#   - a fresh Alertmanager 0.34.1 per `inhibitions` case of routing-tests.yml, with this file: it posts the case's
+#     source and target together and reads /api/v2/alerts (2.07). `check-config` only counts your inhibit rules and
+#     `routes test` never looks at them (Lecture 4 slide 11): only a running Alertmanager proves one;
+#   - an inhibited case and its counterpart that differs only in a label this file lists in `equal` (2.08).
+global:
+  resolve_timeout: 5m
+route:
+  receiver: chat                  # the root: every alert enters here, and one that matches no child ends here
+  group_by: [alertname, service]
+  group_wait: 10s                 # the first notification of a new group waits this long: it is part of your MTTA
+  group_interval: 1m
+  repeat_interval: 4h
+  routes:
+    # TODO: the children (Lecture 4 slide 11): P1 to the pager; P2 and P3 to chat. One matcher per list item:
+    # - matchers: ['severity="P1"']
+    #   receiver: pager
+receivers:
+  - name: pager                   # the on-call's phone: http://localhost:18091 shows what reached it
+    webhook_configs:
+      - url: http://pager:8080/hook/pager
+        send_resolved: true
+  - name: chat
+    webhook_configs:
+      - url: http://pager:8080/hook/chat
+        send_resolved: true
+inhibit_rules:
+  # TODO: at least one rule (I-07), with `equal` (I-08): while the source fires, matching targets are muted. The shape
+  # (uncomment and adapt; the label in `equal` must be one both of your alerts really carry):
+  # - source_matchers: ['alertname="CheckoutErrorRate"']
+  #   target_matchers: ['severity="P2"']
+  #   equal: [system]
+  # A label missing from both alerts counts as equal: misspell the one in `equal` and the source mutes every matching
+  # target, everywhere. The `inhibited: false` case of routing-tests.yml is the one that catches it.

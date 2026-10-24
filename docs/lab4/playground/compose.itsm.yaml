@@ -1,0 +1,156 @@
+# ai-generated: 100% - Claude Code (Opus 5.5) wrote this file from design/LAB4.md section 1; the lecturer reviews it
+#
+# The ITSM Lab 4 overlay for the OpenTelemetry Demo 3.1.0 (https://github.com/open-telemetry/opentelemetry-demo,
+# Apache-2.0; see NOTICE). It is loaded last, in place of the demo's empty compose.extras.yaml:
+#
+#   docker compose --env-file .env --env-file .env.override \
+#     -f compose.yaml -f compose.observability.yaml -f itsm/compose.itsm.yaml build svcdesk
+#   docker compose --env-file .env --env-file .env.override \
+#     -f compose.yaml -f compose.observability.yaml -f itsm/compose.itsm.yaml up -d
+#
+# Never `up --build`: every demo service has a build: section next to its image:, so --build compiles the whole
+# demo from source. Build svcdesk alone, then `up -d` uses the pulled demo images.
+#
+# .env.override must set DEMO_VERSION=3.1.0, IMAGE_VERSION=3.1.0, SVCDESK_REPO=<absolute path of your svcdesk
+# repository> and ITSM_LOGIN=<your GitHub login> (see README.md in this directory).
+#
+# Changed in the demo: prometheus (admin API, the course config, a named volume), flagd (the seeded source),
+# load-generator (no headless browser, ten users), product-catalog and checkout (memory for their garbage collector),
+# otel-collector (a constant host.name, so the snapshot you publish does not carry your machine's name).
+# Added: seeded-flagd, pager, alertmanager, svcdesk, kb-index.
+#
+# The course images can be replaced by a local build or a mirror, in .env.override (not needed for the lab):
+# ITSM_SEEDED_FLAGD_IMAGE, ITSM_PAGER_IMAGE, ITSM_SEEDED_TOXIC_IMAGE (see README.md in this directory).
+
+services:
+  prometheus:
+    command:
+      - --web.console.templates=/etc/prometheus/consoles
+      - --web.console.libraries=/etc/prometheus/console_libraries
+      - --storage.tsdb.retention.time=7d
+      - --config.file=/etc/prometheus/itsm/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+      - --web.enable-otlp-receiver
+      - --enable-feature=exemplar-storage
+      - --web.enable-admin-api                 # TSDB snapshots (agenda section 6: "must be pre-baked")
+    volumes:
+      - ./itsm/prometheus:/etc/prometheus/itsm:ro
+      - ${SVCDESK_REPO:?set SVCDESK_REPO in .env.override}/prometheus:/etc/prometheus/rules:ro
+      - itsm-prometheus-data:/prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+
+  flagd:
+    command:
+      - start
+      - --uri
+      - file:./etc/flagd/demo.flagd.json
+      - --sources
+      - '[{"uri":"http://seeded-flagd:8080/flags.json","provider":"http","interval":5,"timeoutS":5}]'
+    depends_on:
+      seeded-flagd:
+        condition: service_healthy
+
+  # The demo caps these two Go services at 20M with GOMEMLIMIT=16MiB. Measured on the pilot (27 September 2026) with
+  # the course load, both then spend their CPU in the garbage collector: product-catalog at 300 % CPU, GetProduct
+  # above 10 s, frontend-proxy failing most requests - on the healthy shop, before any fault. More room costs 88 MB.
+  product-catalog:
+    environment:
+      - GOMEMLIMIT=48MiB
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  checkout:
+    environment:
+      - GOMEMLIMIT=48MiB
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  otel-collector:
+    environment:
+      # the collector's resource detection runs [env, docker, system] and the first detector wins, so this replaces
+      # the Docker host's name (a laptop's name is often its owner's) on every span, metric and target_info
+      - OTEL_RESOURCE_ATTRIBUTES=host.name=itsm-playground
+
+  load-generator:
+    environment:
+      - LOCUST_BROWSER_TRAFFIC_ENABLED=false
+      - LOCUST_USERS=10
+
+  seeded-flagd:
+    image: ${ITSM_SEEDED_FLAGD_IMAGE:-ghcr.io/swasik/seeded-flagd:2026}
+    container_name: seeded-flagd
+    restart: "no"                              # a restarted injector is a new run: start over with `down -v`
+    ports:
+      - "127.0.0.1:18090:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  pager:
+    image: ${ITSM_PAGER_IMAGE:-ghcr.io/swasik/itsm-pager:2026}
+    container_name: pager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18091:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    container_name: alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=              # no HA: no ten-second gossip settle before the first page
+      - --web.external-url=http://localhost:9093
+    volumes:
+      - ${SVCDESK_REPO}/alertmanager:/etc/alertmanager:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  svcdesk:
+    build: ${SVCDESK_REPO}
+    container_name: svcdesk
+    restart: unless-stopped
+    env_file:
+      - path: ${SVCDESK_REPO}/.env.svcdesk     # optional: your service's own settings
+        required: false
+    environment:
+      SVCDESK_TEST_CLOCK: "0"                  # the server stamps acknowledged_at; no client-supplied clock
+      KB_INDEX_URL: http://kb-index:8080
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - itsm-svcdesk-data:/data
+
+  kb-index:
+    image: ${ITSM_SEEDED_TOXIC_IMAGE:-ghcr.io/swasik/seeded-toxic:2026}
+    container_name: kb-index
+    restart: unless-stopped
+    environment:
+      SEEDED_TOXIC_LOGIN: ${ITSM_LOGIN:-practice}
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+volumes:
+  itsm-prometheus-data:
+  itsm-svcdesk-data:

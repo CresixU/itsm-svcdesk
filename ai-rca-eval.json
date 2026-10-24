@@ -1,0 +1,60 @@
+{
+  "investigator": {
+    "agent": "the course agent loop (docs/lab4/agent/agent.py)",
+    "model": "gemini-3.8-flash",
+    "mcp_server": "prom_mcp.py (mcp 2.2.0)",
+    "transcript": "ai-rca/transcript.md"
+  },
+  "hypotheses": [
+    {
+      "id": "H1",
+      "hypothesis": "**Shipping service** is experiencing latency degradation (firing `ShopServiceSlow`).",
+      "component": "shipping",
+      "predicts": "histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"shipping\", span_name=\"POST /ship-order\"}[5m]))) > 5000",
+      "at": "2026-10-12T05:08:00Z",
+      "result": true,
+      "verdict": "correct",
+      "evidence": "the p99 of shipping's POST /ship-order was 8,450 ms at 05:08:00Z; nothing above 5,000 ms on the baseline (3.3 ms at 04:56:00Z). The agent did not go beyond the alerts here: its first alerts_at call returned ShopServiceSlow with service_name=\"shipping\", which already names the service; the 8-second figure is mine, from the query above."
+    },
+    {
+      "id": "H2",
+      "hypothesis": "The primary contributor to checkout latency is downstream HTTP calls to shipping and fulfillment operations within the order flow, as checkout's outgoing `POST` client spans and `prepareOrderItemsAndShippingQuoteFromCart` span reached ~87.5ms and ~47.8ms p95 latency respectively",
+      "component": "shipping",
+      "predicts": "histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"checkout\", span_kind=\"SPAN_KIND_SERVER\"}[5m]))) > 5000 and on() histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"shipping\", span_name=\"POST /ship-order\"}[5m]))) > 5000",
+      "at": "2026-10-12T05:08:00Z",
+      "result": true,
+      "verdict": "correct",
+      "evidence": "checkout's PlaceOrder and shipping's ship-order both had a p99 of 8,450 ms at 05:08:00Z, and neither was above 5,000 ms on the baseline: the delay in checkout is the delay of the call to shipping. The culprit is right. The numbers the agent quotes (87.5 and 47.8 ms) are not: they come from 2-minute windows over metrics sampled once a minute, and do not show the 8 seconds."
+    },
+    {
+      "id": "H3",
+      "hypothesis": "The shipping service itself suffered latency degradation on its endpoints and downstream client calls, directly cascading latency into checkout's `PlaceOrder` handler",
+      "component": "shipping",
+      "predicts": "histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"shipping\", span_name=\"POST /ship-order\"}[5m]))) > 5000 unless on() histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"shipping\", span_kind=\"SPAN_KIND_CLIENT\"}[5m]))) > 1000",
+      "at": "2026-10-12T05:08:00Z",
+      "result": true,
+      "verdict": "partially_correct",
+      "evidence": "the part that held: shipping's own endpoint was slow (A, p99 8,450 ms). The part that did not: shipping's downstream client calls were not slow (B, p99 5.8 ms, nothing above 1,000 ms), so the delay is inside shipping, not in what it calls. A unless B returns A's value at 05:08:00Z and nothing on the baseline."
+    },
+    {
+      "id": "H4",
+      "hypothesis": "**Ad service** is experiencing failures and timeout latency (firing `ShopServiceErrors`).",
+      "component": "ad",
+      "predicts": "sum(rate(traces_span_metrics_calls_total{service_name=\"ad\", span_name=\"oteldemo.AdService/GetAds\", status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(traces_span_metrics_calls_total{service_name=\"ad\", span_name=\"oteldemo.AdService/GetAds\"}[5m])) > 0.02 unless on() histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"ad\", span_name=\"oteldemo.AdService/GetAds\"}[5m]))) > 1000",
+      "at": "2026-10-12T05:08:00Z",
+      "result": true,
+      "verdict": "partially_correct",
+      "evidence": "the part that held: 10.5 % of GetAds calls failed at 05:08:00Z (A) and none on the baseline. The part that did not: there was no timeout latency, since the p99 of GetAds was 7.7 ms (B returns nothing). Failures yes, slowness no. The agent did not go beyond the alerts for the component: alerts_at returned ShopServiceErrors with service_name=\"ad\"; the claim of timeout latency is its own addition, and it is the wrong part."
+    },
+    {
+      "id": "H5",
+      "hypothesis": "The ad service failures are caused by severe timeouts in feature flag streaming evaluations against flagd, reaching the 15,000ms threshold",
+      "component": "ad",
+      "predicts": "sum(rate(traces_span_metrics_calls_total{service_name=\"ad\", span_name=\"flagd.evaluation.v2.Service/EventStream\", status_code=\"STATUS_CODE_ERROR\"}[5m])) > sum(rate(traces_span_metrics_calls_total{service_name=\"ad\", span_name=\"oteldemo.AdService/GetAds\", status_code=\"STATUS_CODE_ERROR\"}[5m]))",
+      "at": "2026-10-12T05:08:00Z",
+      "result": false,
+      "verdict": "hallucinated",
+      "evidence": "if failed flagd streams caused the failed ad requests, there would be at least as many of them: the flagd stream errors were 0.0042 a second against 0.0167 failed GetAds calls a second at 05:08:00Z, so the query returns nothing: the stream errors are too few to be the cause of the failed requests. The 15-second EventStream spans the agent saw are real (p95 15,000 ms at 05:08:00Z), but the window before the onset holds none, which fits a stream reconnecting when flagd's flags changed at the onset (I did not verify that mechanism). They are not the cause of the failed GetAds calls."
+    }
+  ]
+}

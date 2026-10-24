@@ -1,0 +1,72 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Derived from src/prometheus/prometheus-config.yaml of the OpenTelemetry Demo 3.1.0. Changed for the ITSM
+# course's Lab 4 (design/LAB4.md section 1.1): the `otlp` and `storage` sections are the demo's; added are the
+# rule files from your repository, the Alertmanager, 5-second scrapes of the course services and svcdesk, and a
+# 10-second rule evaluation. The demo's own metrics still arrive by OTLP push (every 60 s).
+# ai-generated: 100% - Claude Code (Opus 5.5) derived this file; the lecturer reviews it
+global:
+  scrape_interval: 15s
+  evaluation_interval: 10s
+otlp:
+  keep_identifying_resource_attributes: true
+  promote_resource_attributes:
+  - service.instance.id
+  - service.name
+  - service.namespace
+  - service.version
+  - service.criticality
+  - cloud.availability_zone
+  - cloud.region
+  - deployment.environment.name
+  - k8s.cluster.name
+  - k8s.container.name
+  - k8s.cronjob.name
+  - k8s.daemonset.name
+  - k8s.deployment.name
+  - k8s.job.name
+  - k8s.namespace.name
+  - k8s.node.name
+  - k8s.pod.name
+  - k8s.replicaset.name
+  - k8s.statefulset.name
+  - container.name
+  - host.name
+  - postgresql.database.name
+  - postgresql.schema.name
+  - postgresql.table.name
+  - postgresql.index.name
+  - kafka.cluster.alias
+  - collector.instance.id
+storage:
+  tsdb:
+    out_of_order_time_window: 30m
+rule_files:
+- /etc/prometheus/rules/alerts.yml
+- /etc/prometheus/rules/demo-alerts.yml
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      - alertmanager:9093
+scrape_configs:
+- job_name: seeded-flagd
+  scrape_interval: 5s
+  static_configs:
+  - targets:
+    - seeded-flagd:8080
+- job_name: svcdesk
+  scrape_interval: 5s
+  static_configs:
+  - targets:
+    - svcdesk:8080
+- job_name: pager
+  scrape_interval: 5s
+  static_configs:
+  - targets:
+    - pager:8080
+- job_name: alertmanager
+  static_configs:
+  - targets:
+    - alertmanager:9093

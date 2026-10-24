@@ -1,0 +1,36 @@
+# ai-generated: 85% - Claude Code drafted these cases from INCIDENT-SPEC.md I-06 to I-08; the author reviews them
+# alertmanager/routing-tests.yml - the cases that prove my routing tree (INCIDENT-SPEC.md I-06 to I-08; checks
+# L4-CORE-2.06 to 2.08). Every alert below is one of my real rules (prometheus/demo-alerts.yml, prometheus/alerts.yml):
+# its static labels plus its alertname.
+routes:
+  # the shop's pages: P1 goes to the pager and only to it
+  - labels: {alertname: CheckoutErrorRate, service: checkout, severity: P1, system: shop}
+    receivers: [pager]
+  - labels: {alertname: CheckoutLatencyHigh, service: checkout, severity: P1, system: shop}
+    receivers: [pager]
+  # the shop's warnings: P2 and P3 go to chat and never to the pager
+  - labels: {alertname: FrontendErrorRate, service: frontend, severity: P2, system: shop}
+    receivers: [chat]
+  - labels: {alertname: FrontendLatencyHigh, service: frontend, severity: P3, system: shop}
+    receivers: [chat]
+  # svcdesk's Lab 3 alerts join the same tree: the fast availability burn pages, the slow latency burn goes to chat
+  - labels: {alertname: KbSearchAvailabilityBurnFast, service: svcdesk, slo: availability, severity: P1}
+    receivers: [pager]
+  - labels: {alertname: KbSearchLatencyBurnSlow, service: svcdesk, slo: latency, severity: P3}
+    receivers: [chat]
+inhibitions:
+  # the pair of I-08: the same source, and two targets that differ only in `system`, the label the rule lists in `equal`
+  - source: {alertname: CheckoutErrorRate, service: checkout, severity: P1, system: shop}
+    target: {alertname: FrontendErrorRate, service: frontend, severity: P2, system: shop}
+    inhibited: true
+  - source: {alertname: CheckoutErrorRate, service: checkout, severity: P1, system: shop}
+    target: {alertname: FrontendErrorRate, service: frontend, severity: P2, system: other}
+    inhibited: false
+  # a P1 is never muted by another P1: two pages for one incident are both delivered
+  - source: {alertname: CheckoutErrorRate, service: checkout, severity: P1, system: shop}
+    target: {alertname: CheckoutLatencyHigh, service: checkout, severity: P1, system: shop}
+    inhibited: false
+  # svcdesk's alerts carry no `system`: a shop page does not mute them, because `system` is missing from the target only
+  - source: {alertname: CheckoutErrorRate, service: checkout, severity: P1, system: shop}
+    target: {alertname: KbSearchLatencyBurnSlow, service: svcdesk, slo: latency, severity: P3}
+    inhibited: false

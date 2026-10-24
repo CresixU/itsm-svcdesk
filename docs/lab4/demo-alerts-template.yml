@@ -1,0 +1,60 @@
+# ai-generated: ??% - TODO replace ?? with a number and say in one line how this file was written
+# prometheus/demo-alerts.yml - symptom alerts on the shop (INCIDENT-SPEC.md I-01, I-02, I-05; checks L4-CORE-2.01,
+# 2.02, 2.05). Copy it to prometheus/demo-alerts.yml in your repository, next to Lab 3's alerts.yml, before you start
+# the playground: its Prometheus loads both files and evaluates them every 10 s. After an edit, reload it:
+#   curl -X POST http://localhost:9090/-/reload
+#
+# What the checker does with this file:
+#   - `promtool check rules demo-alerts.yml` must pass (2.01);
+#   - at least two alerting rules select the shop's metrics - not svcdesk's http_server_request_duration_seconds,
+#     not the injector's seeded_*, not the pager's itsm_pager_* - each with the labels `service` and `severity`
+#     (P1, P2 or P3), and at least one of them is P1 (2.01);
+#   - no rule, here or in alerts.yml, selects a seeded_* series: the injector's series define the onset, never the
+#     detection (2.02);
+#   - `amtool config routes test` with each alerting rule's static `labels` plus its alertname: a P1 must reach the
+#     pager, a P2 or P3 chat and never the pager (2.05). Labels your expression adds at run time (a `sum by
+#     (service_name)`) are not in that test: route on the static ones.
+#
+# The shop's metrics. The demo's collector turns every span into two series, which reach Prometheus by OTLP push
+# every 60 s - one sample a minute:
+#   traces_span_metrics_calls_total                     a counter of spans
+#   traces_span_metrics_duration_milliseconds_bucket    a histogram of their durations, in MILLISECONDS
+# with the labels service_name (checkout, payment, frontend, product-catalog, ...), span_name, span_kind
+# (SPAN_KIND_SERVER, SPAN_KIND_CLIENT, SPAN_KIND_INTERNAL) and status_code (STATUS_CODE_ERROR marks a failed span;
+# STATUS_CODE_UNSET and STATUS_CODE_OK do not).
+#   - Windows of at least 5 minutes: a rate() over [1m] or [2m] holds one or two samples and returns nothing or noise.
+#   - Page only on SERVER spans (span_kind="SPAN_KIND_SERVER"): what a service answered its callers. The load
+#     generator's own client calls fail all the time on the healthy shop (it calls an AI service that minimal mode does
+#     not run); a rule that counts them pages on the baseline, and a P1 firing on the baseline fails I-10.
+#   - Symptoms, not causes (Lecture 4 slide 7): page on what the shop's users feel - checkout failing, pages slow -
+#     and leave the causes to dashboards and to chat.
+#   - Every fault the injector draws makes checkout fail or slow down (INCIDENT-SPEC.md 2.2), so a P1 on checkout's
+#     errors and a P1 on its latency page on every draw; with errors alone, a draw whose only checkout symptom is
+#     latency pages no one, and I-17 fails.
+#   - `for:` delays firing, so it adds to your MTTD. `keep_firing_for:` delays resolving, so it adds to your MTTR, but
+#     it stops a flapping alert from ending its firing run early: the end of the detecting alert's first firing run
+#     is your recovery (I-13). Leave out the group's `interval`: the course Prometheus evaluates every 10 s.
+#   - Any alert whose firing run starts after the onset can become the detecting alert, whatever its severity (I-12):
+#     keep every rule here quiet on the healthy shop, not only the P1s. Each group is evaluated at its own moment of
+#     the 10 s interval, so across groups the earlier start wins by a second or two; only inside one group do equal
+#     starts go to the most severe alert (INCIDENT-SPEC.md 4.3).
+groups:
+  - name: shop-symptoms
+    rules:
+      # One example, commented out. Uncomment it and adapt it, or write your own. It pages when more than 5 % of the
+      # requests checkout answered in the last 5 minutes failed.
+      # - alert: CheckoutErrorRate
+      #   expr: |
+      #     sum(rate(traces_span_metrics_calls_total{service_name="checkout", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}[5m]))
+      #     /
+      #     sum(rate(traces_span_metrics_calls_total{service_name="checkout", span_kind="SPAN_KIND_SERVER"}[5m]))
+      #     > 0.05
+      #   for: 2m
+      #   labels:
+      #     service: checkout          # required: the service the symptom is about
+      #     severity: P1               # required: P1 pages (the pager), P2 and P3 go to chat
+      #   annotations:
+      #     summary: "More than 5 % of checkout requests fail"
+
+      # Your second rule (at least two in this file). A latency rule reads the histogram, in milliseconds:
+      #   histogram_quantile(0.99, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{...}[5m]))) > 2000

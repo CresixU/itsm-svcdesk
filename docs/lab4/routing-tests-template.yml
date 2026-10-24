@@ -1,0 +1,33 @@
+# ai-generated: ??% - TODO replace ?? with a number and say in one line how this file was written
+# alertmanager/routing-tests.yml - the cases that prove your routing tree (INCIDENT-SPEC.md I-06 to I-08; checks
+# L4-CORE-2.06 to 2.08). Copy it to alertmanager/routing-tests.yml in your repository, next to alertmanager.yml.
+#
+# routes: at least three cases. `labels` is the label set of one alert - use your real alerts: each rule's static
+# labels plus `alertname` - and `receivers` is exactly what `amtool config routes test` prints for it, in the tree's
+# order: [pager], [chat], or two names when a route that matched has `continue: true`. Put at least one of svcdesk's
+# Lab 3 alerts among them: they join the same tree.
+#
+# inhibitions: every case is run on a fresh Alertmanager 0.34.1 with your alertmanager.yml. The checker posts `source`
+# and `target` together as two firing alerts and reads /api/v2/alerts: `inhibited: true` holds when the target is
+# suppressed by an inhibition, `inhibited: false` when it stays active. Among them there must be the pair of I-08: the
+# same source, two targets with the same label names that differ in the value of ONE label, a label your matching
+# inhibit rule lists in `equal` - one inhibited, one not. That pair is the equal-labels pitfall proved both ways.
+#
+# The first `routes` case and the two `inhibitions` cases below are the published example of INCIDENT-SPEC.md section
+# 4.1; the TODO cases are yours to fill. They illustrate the shape: replace them all with your own alerts, whose labels
+# your alertmanager.yml really routes and inhibits. Quote a label value that YAML would read as a number or a boolean
+# ("1", "true").
+routes:
+  - labels: {alertname: CheckoutErrorRate, service: checkout, severity: P1}
+    receivers: [pager]
+  - labels: {alertname: TODO, service: TODO, severity: P2}
+    receivers: [chat]
+  - labels: {alertname: TODO, service: svcdesk, slo: TODO, severity: TODO}
+    receivers: [TODO]
+inhibitions:
+  - source: {alertname: PaymentDown, service: payment, severity: P1, cluster: shop}
+    target: {alertname: CheckoutErrorRate, service: checkout, severity: P2, cluster: shop}
+    inhibited: true
+  - source: {alertname: PaymentDown, service: payment, severity: P1, cluster: shop}
+    target: {alertname: CheckoutErrorRate, service: checkout, severity: P2, cluster: other}
+    inhibited: false
