@@ -1,0 +1,27 @@
+# ai-generated: 85% - Claude Code drafted both rules and their tests from reading src/svcdesk; the author reviews them
+rules:
+  - id: svcdesk-sql-execute-non-literal
+    languages: [python]
+    options:
+      constant_propagation: false
+    severity: WARNING
+    message: >-
+      The SQL passed to execute() is not a string literal. svcdesk keeps every statement a literal with `?`
+      placeholders so that a value can never become SQL. If the statement is assembled from constant fragments (as in
+      storage.list_tickets, a reviewed exception), say so in a comment; otherwise use a literal and parameters.
+    patterns:
+      - pattern: $CONN.execute($QUERY, ...)
+      - pattern-not: $CONN.execute("...", ...)
+
+  - id: svcdesk-direct-wall-clock
+    languages: [python]
+    severity: WARNING
+    message: >-
+      The wall clock is read directly. Every instant in svcdesk must come from main.get_now(request), which honours the
+      X-Test-Clock header (API.md section 8); a direct read makes SLA and DORA results untestable. main.get_now itself
+      is the one reviewed read.
+    pattern-either:
+      - pattern: datetime.now(...)
+      - pattern: datetime.utcnow()
+      - pattern: datetime.datetime.now(...)
+      - pattern: datetime.datetime.utcnow()

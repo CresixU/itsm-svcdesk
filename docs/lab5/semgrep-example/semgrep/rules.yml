@@ -1,0 +1,11 @@
+# ai-generated: 0% - the course's example for CI-SPEC.md P-31; a toy rule on a toy function, not on svcdesk
+rules:
+  - id: toy-sleep-in-handler
+    languages: [python]
+    severity: WARNING
+    message: time.sleep() in a request handler blocks the worker; use asyncio.sleep in async code
+    patterns:
+      - pattern: time.sleep(...)
+      - pattern-inside: |
+          async def $HANDLER(...):
+              ...
