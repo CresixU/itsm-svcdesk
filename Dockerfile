@@ -23,6 +23,10 @@ COPY fixtures/ /app/fixtures/
 
 # The SQLite file goes to /data (a named volume in docker-compose.yml), so tickets survive a restart.
 RUN mkdir -p /data
+# Lab 5 (triage, Semgrep dockerfile.security.missing-user): run as an unprivileged user. Only /data must be writable;
+# a named volume takes the owner of the image's /data on first use.
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin svcdesk && chown svcdesk:svcdesk /data
+USER svcdesk
 ENV SVCDESK_DB=/data/svcdesk.db
 # Lab 3: no *_created gauge series next to every histogram label set (fewer series, M-07).
 ENV PROMETHEUS_DISABLE_CREATED_SERIES=True
